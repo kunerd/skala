@@ -1,11 +1,12 @@
-use std::path::{Path, PathBuf};
+use skala::{Candidate, Error, Reviewed};
 
 use iced::{
-    Task, Theme, Widget,
-    widget::{button, center, column, row, text, text_input},
+    Font, Task, Theme, Widget, font,
+    widget::{button, center, column, progress_bar, row, stack, text, text_input},
     window,
 };
-use skala::{Candidate, Error};
+
+use std::path::{Path, PathBuf};
 
 fn main() -> iced::Result {
     iced::application(Skala::new, Skala::update, Skala::view)
@@ -30,9 +31,14 @@ enum Message {
 }
 
 enum Skala {
-    Setup { path: Option<PathBuf> },
+    Setup {
+        path: Option<PathBuf>,
+    },
     Searching,
-    Review { candidates: Vec<Candidate> },
+    Review {
+        candidates: Vec<Candidate>,
+        reviewed: Vec<Reviewed>,
+    },
 }
 
 impl Skala {
@@ -50,7 +56,10 @@ impl Skala {
             }
             Message::SearchPathChoosen(None) => Task::none(),
             Message::CandidatesFound(Ok(candidates)) => {
-                *self = Self::Review { candidates };
+                *self = Self::Review {
+                    candidates,
+                    reviewed: vec![],
+                };
 
                 Task::none()
             }
@@ -78,7 +87,26 @@ impl Skala {
                 center(row![input, search].spacing(10).width(500)).boxed()
             }
             Skala::Searching => center(text("Searching ...")).boxed(),
-            Skala::Review { candidates } => {
+            Skala::Review {
+                candidates,
+                reviewed,
+            } => {
+                let progress = {
+                    let cur = reviewed.len() as f32;
+                    let count = candidates.len() as f32;
+
+                    let label = text!("{}/{}", cur, count)
+                        .size(14)
+                        .font(Font::MONOSPACE.weight(font::Weight::ExtraBold))
+                        .color(self.theme().palette().primary.strong.text);
+
+                    let bar = progress_bar(0.0..=1.0, cur / count)
+                        .style(progress_bar::secondary)
+                        .girth(16);
+
+                    stack![bar, center(label)]
+                };
+
                 let list = column(candidates.iter().filter_map(|c| {
                     let path = c.path.as_path().to_str().map(text)?;
                     let hash = text!("{:02x}", c.hash)
@@ -89,7 +117,9 @@ impl Skala {
                 }))
                 .spacing(5);
 
-                center(list).padding(10).boxed()
+                column![progress, center(list).padding(10)]
+                    .spacing(20)
+                    .boxed()
             }
         }
     }
